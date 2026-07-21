@@ -250,6 +250,7 @@ export async function saveRequestUsage(entry) {
     const completionTokens = tokens.completion_tokens || tokens.output_tokens || 0;
 
     let inserted = false;
+    let historyId = null;
 
     // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
     // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
@@ -275,10 +276,11 @@ export async function saveRequestUsage(entry) {
         if (!existing.endpoint && entry.endpoint) {
           db.run(`UPDATE usageHistory SET endpoint = ? WHERE id = ?`, [entry.endpoint, existing.id]);
         }
+        historyId = existing.id;
         return;
       }
 
-      db.run(
+      const insert = db.run(
         `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           entry.timestamp, entry.provider || null, entry.model || null,
@@ -287,6 +289,7 @@ export async function saveRequestUsage(entry) {
           stringifyJson(tokens), stringifyJson({}),
         ]
       );
+      historyId = insert?.lastInsertRowid ?? db.get(`SELECT last_insert_rowid() AS id`)?.id;
 
       const dateKey = getLocalDateKey(entry.timestamp);
       const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
@@ -308,6 +311,7 @@ export async function saveRequestUsage(entry) {
       pushToRing(entry);
       scheduleStatsEvent("update", 250);
     }
+    return { id: Number(historyId), cost: entry.cost || 0, inserted };
   } catch (e) {
     console.error("Failed to save usage stats:", e);
   }

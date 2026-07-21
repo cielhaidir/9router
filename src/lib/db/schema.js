@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup — it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -83,6 +83,13 @@ export const TABLES = {
       machineId: "TEXT",
       isActive: "INTEGER DEFAULT 1",
       createdAt: "TEXT NOT NULL",
+      creditBalance: "INTEGER NOT NULL DEFAULT 0",
+      totalTopup: "INTEGER NOT NULL DEFAULT 0",
+      totalSpent: "INTEGER NOT NULL DEFAULT 0",
+      allowedModels: "TEXT NOT NULL DEFAULT '[]'",
+      allowedCombos: "TEXT NOT NULL DEFAULT '[]'",
+      notes: "TEXT",
+      updatedAt: "TEXT NOT NULL DEFAULT ''",
     },
     indexes: ["CREATE INDEX IF NOT EXISTS idx_ak_key ON apiKeys(key)"],
   },
@@ -94,6 +101,7 @@ export const TABLES = {
       models: "TEXT NOT NULL",
       createdAt: "TEXT NOT NULL",
       updatedAt: "TEXT NOT NULL",
+      pricing: "TEXT",
     },
     indexes: ["CREATE INDEX IF NOT EXISTS idx_combo_name ON combos(name)"],
   },
@@ -127,6 +135,18 @@ export const TABLES = {
       "CREATE INDEX IF NOT EXISTS idx_uh_provider ON usageHistory(provider)",
       "CREATE INDEX IF NOT EXISTS idx_uh_model ON usageHistory(model)",
       "CREATE INDEX IF NOT EXISTS idx_uh_conn ON usageHistory(connectionId)",
+    ],
+  },
+  billingLedger: {
+    columns: {
+      id: "TEXT PRIMARY KEY", apiKeyId: "TEXT NOT NULL", type: "TEXT NOT NULL",
+      amount: "INTEGER NOT NULL", currency: "TEXT NOT NULL DEFAULT 'USD'", calculatedAmount: "INTEGER",
+      billingModel: "TEXT", requestedModel: "TEXT", comboId: "TEXT", usageHistoryId: "INTEGER",
+      requestId: "TEXT", tokens: "TEXT NOT NULL DEFAULT '{}'", description: "TEXT", createdBy: "TEXT", createdAt: "TEXT NOT NULL",
+    },
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_bl_key_created ON billingLedger(apiKeyId, createdAt DESC)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_bl_usage_once ON billingLedger(usageHistoryId) WHERE usageHistoryId IS NOT NULL",
     ],
   },
   usageDaily: {

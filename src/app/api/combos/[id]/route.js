@@ -27,6 +27,13 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
+    const allowedFields = new Set(["name", "models", "kind", "pricing"]);
+    if (Object.keys(body).some((key) => !allowedFields.has(key))) {
+      return NextResponse.json({ error: "Unsupported combo fields" }, { status: 400 });
+    }
+    if (body.pricing !== undefined && body.pricing !== null && (typeof body.pricing !== "object" || Array.isArray(body.pricing))) {
+      return NextResponse.json({ error: "Invalid pricing" }, { status: 400 });
+    }
     
     // Validate name format if provided
     if (body.name) {

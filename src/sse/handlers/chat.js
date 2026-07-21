@@ -8,7 +8,8 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
-import { getSettings } from "@/lib/localDb";
+import { getSettings, getComboByName } from "@/lib/localDb";
+import { authenticatedBillingKey, authorizeBillingRequest } from "../services/billing.js";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
@@ -64,16 +65,9 @@ export async function handleChat(request, clientRawRequest = null) {
 
   // Enforce API key if enabled in settings
   const settings = await getSettings();
-  if (settings.requireApiKey) {
-    if (!apiKey) {
-      log.warn("AUTH", "Missing API key (requireApiKey=true)");
-      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
-    }
-    const valid = await isValidApiKey(apiKey);
-    if (!valid) {
-      log.warn("AUTH", "Invalid API key (requireApiKey=true)");
-      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
-    }
+  const billingKey = await authenticatedBillingKey(apiKey);
+  if (settings.requireApiKey && !billingKey) {
+    return errorResponse(HTTP_STATUS.UNAUTHORIZED, apiKey ? "Invalid API key" : "Missing API key");
   }
 
   if (!modelStr) {
@@ -88,6 +82,10 @@ export async function handleChat(request, clientRawRequest = null) {
 
   // Check if model is a combo (has multiple models with fallback)
   const comboModels = await getComboModels(modelStr);
+  try { authorizeBillingRequest({ key: billingKey, requestedModel: modelStr, isCombo: !!comboModels }); }
+  catch (error) { return errorResponse(HTTP_STATUS.FORBIDDEN, error.message); }
+  const combo = comboModels ? await getComboByName(modelStr) : null;
+  const billingContext = billingKey ? { apiKeyId: billingKey.id, requestedModel: modelStr, comboId: combo?.id || null, comboPricing: combo?.pricing || null } : null;
   if (comboModels) {
     // Check for combo-specific strategy first, fallback to global
     const comboStrategies = settings.comboStrategies || {};
@@ -105,7 +103,7 @@ export async function handleChat(request, clientRawRequest = null) {
             const { tools, tool_choice, ...cleanBody } = clientRawRequest.body || {};
             cleanRawReq = { ...clientRawRequest, body: cleanBody };
           }
-          return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
+          return handleSingleModelChat(b, m, cleanRawReq, request, apiKey, billingContext);
         },
         log,
         comboName: modelStr,
@@ -119,7 +117,7 @@ export async function handleChat(request, clientRawRequest = null) {
     return handleComboChat({
       body,
       models: comboModels,
-      handleSingleModel: (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+      handleSingleModel: (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, billingContext),
       log,
       comboName: modelStr,
       comboStrategy,
@@ -128,13 +126,13 @@ export async function handleChat(request, clientRawRequest = null) {
   }
 
   // Single model request
-  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey);
+  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, billingContext);
 }
 
 /**
  * Handle single model chat request
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, billingContext = null) {
   const modelInfo = await getModelInfo(modelStr);
 
   // If provider is null, this might be a combo name - check and handle
@@ -158,7 +156,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
               const { tools, tool_choice, ...cleanBody } = clientRawRequest.body || {};
               cleanRawReq = { ...clientRawRequest, body: cleanBody };
             }
-            return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
+            return handleSingleModelChat(b, m, cleanRawReq, request, apiKey, billingContext);
           },
           log,
           comboName: modelStr,
@@ -172,7 +170,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       return handleComboChat({
         body,
         models: comboModels,
-        handleSingleModel: (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+        handleSingleModel: (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, billingContext),
         log,
         comboName: modelStr,
         comboStrategy,
@@ -239,6 +237,15 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       connectionId: credentials.connectionId,
       userAgent,
       apiKey,
+      billingContext,
+      onUsageRecorded: billingContext ? async ({ usageHistoryId, tokens, provider: billedProvider, model: billedModel, requestId }) => {
+        try {
+          const { applyUsageDebit, resolveBillingRate, getPricingForModel } = await import("@/lib/db/index.js");
+          const pricing = await getPricingForModel(billedProvider, billedModel);
+          const rate = resolveBillingRate({ combo: billingContext.comboPricing ? { pricing: billingContext.comboPricing } : null, pricing });
+          if (rate) await applyUsageDebit({ ...billingContext, usageHistoryId, requestId, billingModel: `${billedProvider}/${billedModel}`, tokens, rate });
+        } catch (error) { log.error("BILLING", "usage debit failed", { error: error.message }); }
+      } : null,
       ccFilterNaming: !!chatSettings.ccFilterNaming,
       rtkEnabled: !!chatSettings.rtkEnabled,
       headroomEnabled: !!chatSettings.headroomEnabled,

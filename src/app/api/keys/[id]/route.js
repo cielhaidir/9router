@@ -21,7 +21,10 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { isActive } = body;
+    const { isActive, name, allowedModels, allowedCombos, notes } = body;
+    const allowedFields = new Set(["isActive", "name", "allowedModels", "allowedCombos", "notes"]);
+    if (Object.keys(body).some((key) => !allowedFields.has(key))) return NextResponse.json({ error: "Unsupported key fields" }, { status: 400 });
+    for (const list of [allowedModels, allowedCombos]) if (list !== undefined && (!Array.isArray(list) || list.some((v) => typeof v !== "string" || !v.trim()) || new Set(list).size !== list.length)) return NextResponse.json({ error: "Allowlists must contain unique non-empty strings" }, { status: 400 });
 
     const existing = await getApiKeyById(id);
     if (!existing) {
@@ -30,6 +33,10 @@ export async function PUT(request, { params }) {
 
     const updateData = {};
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (name !== undefined) updateData.name = name;
+    if (allowedModels !== undefined) updateData.allowedModels = allowedModels;
+    if (allowedCombos !== undefined) updateData.allowedCombos = allowedCombos;
+    if (notes !== undefined) updateData.notes = notes;
 
     const updated = await updateApiKey(id, updateData);
 

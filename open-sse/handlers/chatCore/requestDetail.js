@@ -93,13 +93,13 @@ export function formatDoneLine({ usage, latency }) {
   return `DONE ${latency?.total ?? 0}ms${ttftStr} · ${inStr} · OUT ${outTok}`;
 }
 
-export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, endpoint, label = "USAGE", silent = false }) {
-  if (!tokens || typeof tokens !== "object") return;
+export async function saveUsageStats({ provider, model, tokens, connectionId, apiKey, endpoint, label = "USAGE", silent = false }) {
+  if (!tokens || typeof tokens !== "object") return null;
 
   const inTokens = tokens.input_tokens ?? tokens.prompt_tokens ?? 0;
   const outTokens = tokens.output_tokens ?? tokens.completion_tokens ?? 0;
 
-  if (inTokens === 0 && outTokens === 0) return;
+  if (inTokens === 0 && outTokens === 0) return null;
 
   if (!silent) {
     const time = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -114,7 +114,7 @@ export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, 
     completion_tokens: tokens.completion_tokens ?? tokens.output_tokens ?? 0
   };
 
-  saveRequestUsage({
+  return saveRequestUsage({
     provider: provider || "unknown",
     model: model || "unknown",
     tokens: normalized,
@@ -122,5 +122,5 @@ export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, 
     connectionId: connectionId || undefined,
     apiKey: apiKey || undefined,
     endpoint: endpoint || null
-  }).catch(() => {});
+  }).catch(() => null);
 }

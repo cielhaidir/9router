@@ -1,0 +1,1 @@
+import { NextResponse } from "next/server"; import { getBillingOverview } from "@/lib/db/index.js"; export async function GET(){try{return NextResponse.json(await getBillingOverview());}catch(e){return NextResponse.json({error:"Failed to load billing overview"},{status:500});}}

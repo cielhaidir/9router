@@ -21,7 +21,10 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { name, models, kind } = body;
+    const { name, models, kind, pricing } = body;
+    const allowedFields = new Set(["name", "models", "kind", "pricing"]);
+    if (Object.keys(body).some((key) => !allowedFields.has(key))) return NextResponse.json({ error: "Unsupported combo fields" }, { status: 400 });
+    if (pricing !== undefined && pricing !== null && (typeof pricing !== "object" || Array.isArray(pricing))) return NextResponse.json({ error: "Invalid pricing" }, { status: 400 });
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -38,7 +41,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Combo name already exists" }, { status: 400 });
     }
 
-    const combo = await createCombo({ name, models: models || [], kind: kind || null });
+    const combo = await createCombo({ name, models: models || [], kind: kind || null, pricing });
 
     return NextResponse.json(combo, { status: 201 });
   } catch (error) {

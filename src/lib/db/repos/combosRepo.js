@@ -1,73 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
-
-function rowToCombo(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    name: row.name,
-    kind: row.kind,
-    models: parseJson(row.models, []),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
-
-export async function getCombos() {
-  const db = await getAdapter();
-  const rows = db.all(`SELECT * FROM combos ORDER BY createdAt ASC`);
-  return rows.map(rowToCombo);
-}
-
-export async function getComboById(id) {
-  const db = await getAdapter();
-  const row = db.get(`SELECT * FROM combos WHERE id = ?`, [id]);
-  return rowToCombo(row);
-}
-
-export async function getComboByName(name) {
-  const db = await getAdapter();
-  const row = db.get(`SELECT * FROM combos WHERE name = ?`, [name]);
-  return rowToCombo(row);
-}
-
-export async function createCombo(data) {
-  const db = await getAdapter();
-  const now = new Date().toISOString();
-  const combo = {
-    id: uuidv4(),
-    name: data.name,
-    kind: data.kind || null,
-    models: data.models || [],
-    createdAt: now,
-    updatedAt: now,
-  };
-  db.run(
-    `INSERT INTO combos(id, name, kind, models, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?)`,
-    [combo.id, combo.name, combo.kind, stringifyJson(combo.models), combo.createdAt, combo.updatedAt]
-  );
-  return combo;
-}
-
-export async function updateCombo(id, data) {
-  const db = await getAdapter();
-  let result = null;
-  db.transaction(() => {
-    const row = db.get(`SELECT * FROM combos WHERE id = ?`, [id]);
-    if (!row) return;
-    const merged = { ...rowToCombo(row), ...data, updatedAt: new Date().toISOString() };
-    db.run(
-      `UPDATE combos SET name = ?, kind = ?, models = ?, updatedAt = ? WHERE id = ?`,
-      [merged.name, merged.kind, stringifyJson(merged.models || []), merged.updatedAt, id]
-    );
-    result = merged;
-  });
-  return result;
-}
-
-export async function deleteCombo(id) {
-  const db = await getAdapter();
-  const res = db.run(`DELETE FROM combos WHERE id = ?`, [id]);
-  return (res?.changes ?? 0) > 0;
-}
+import { normalizeRateToMicrosPerMillion } from "./billingRepo.js";
+export function normalizeComboPricing(pricing) { if (pricing == null) return null; if(typeof pricing!=="object"||Array.isArray(pricing))throw new Error("Invalid pricing"); const allowed=new Set(["input","output","cached","reasoning","enabled"]);for(const k of Object.keys(pricing))if(!allowed.has(k))throw new Error("Unknown pricing field"); const parse=(v)=>v == null ? 0 : normalizeRateToMicrosPerMillion(v); return {currency:"USD",inputMicrosPerMillion:parse(pricing.input),outputMicrosPerMillion:parse(pricing.output),cachedMicrosPerMillion:parse(pricing.cached),reasoningMicrosPerMillion:parse(pricing.reasoning),enabled:pricing.enabled!==false}; }
+function rowToCombo(row){return row&&{id:row.id,name:row.name,kind:row.kind,models:parseJson(row.models,[]),pricing:parseJson(row.pricing,null),createdAt:row.createdAt,updatedAt:row.updatedAt};}
+export async function getCombos(){const db=await getAdapter();return db.all("SELECT * FROM combos ORDER BY createdAt ASC").map(rowToCombo);} export async function getComboById(id){const db=await getAdapter();return rowToCombo(db.get("SELECT * FROM combos WHERE id=?",[id]));} export async function getComboByName(name){const db=await getAdapter();return rowToCombo(db.get("SELECT * FROM combos WHERE name=?",[name]));}
+export async function createCombo(data){const db=await getAdapter(),now=new Date().toISOString();const combo={id:uuidv4(),name:data.name,kind:data.kind||null,models:data.models||[],pricing:normalizeComboPricing(data.pricing),createdAt:now,updatedAt:now};db.run("INSERT INTO combos(id,name,kind,models,pricing,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?)",[combo.id,combo.name,combo.kind,stringifyJson(combo.models),stringifyJson(combo.pricing),now,now]);return combo;}
+export async function updateCombo(id,data){const db=await getAdapter();let result=null;db.transaction(()=>{const old=rowToCombo(db.get("SELECT * FROM combos WHERE id=?",[id]));if(!old)return;const combo={...old,...Object.fromEntries(Object.entries(data).filter(([k])=>["name","kind","models","pricing"].includes(k))),updatedAt:new Date().toISOString()};if(Object.hasOwn(data,"pricing"))combo.pricing=normalizeComboPricing(data.pricing);db.run("UPDATE combos SET name=?,kind=?,models=?,pricing=?,updatedAt=? WHERE id=?",[combo.name,combo.kind,stringifyJson(combo.models||[]),stringifyJson(combo.pricing),combo.updatedAt,id]);result=combo;});return result;} export async function deleteCombo(id){const db=await getAdapter();return(db.run("DELETE FROM combos WHERE id=?",[id])?.changes??0)>0;}

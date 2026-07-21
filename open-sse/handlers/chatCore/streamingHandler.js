@@ -110,10 +110,13 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
 /**
  * Build onStreamComplete callback for streaming usage tracking.
  */
-export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestStartTime, body, stream, finalBody, translatedBody, clientRawRequest, pxpipe, reqTag, log }) {
+export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestStartTime, body, stream, finalBody, translatedBody, clientRawRequest, onUsageRecorded, pxpipe, reqTag, log }) {
   const streamDetailId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
-  const onStreamComplete = (contentObj, usage, ttftAt) => {
+  let usageHandled = false;
+  const onStreamComplete = async (contentObj, usage, ttftAt) => {
+    if (usageHandled) return;
+    usageHandled = true;
     const latency = {
       ttft: ttftAt ? ttftAt - requestStartTime : Date.now() - requestStartTime,
       total: Date.now() - requestStartTime
@@ -136,7 +139,11 @@ export function buildOnStreamComplete({ provider, model, connectionId, apiKey, r
     });
 
     // Persist stream usage to DB (no console line; the "📊 done" line below is authoritative)
-    saveUsageStats({ provider, model, tokens: usage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, label: "STREAM USAGE", silent: true });
+    const usageRecord = await saveUsageStats({ provider, model, tokens: usage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, label: "STREAM USAGE", silent: true });
+    if (usageRecord?.id && onUsageRecorded) {
+      try { await onUsageRecorded({ usageHistoryId: usageRecord.id, tokens: usage, provider, model, requestId: contentObj?.id || null }); }
+      catch (error) { console.error("[Billing] usage callback failed:", error?.message || error); }
+    }
     if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage, latency }));
   };
 

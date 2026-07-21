@@ -29,14 +29,20 @@ export {
 
 // API keys
 export {
-  getApiKeys, getApiKeyById, createApiKey, updateApiKey, deleteApiKey, validateApiKey,
+  getApiKeys, getApiKeyById, getApiKeyByValue, createApiKey, updateApiKey, deleteApiKey, validateApiKey,
 } from "./repos/apiKeysRepo.js";
 
 // Combos
 export {
   getCombos, getComboById, getComboByName,
-  createCombo, updateCombo, deleteCombo,
+  createCombo, updateCombo, deleteCombo, normalizeComboPricing,
 } from "./repos/combosRepo.js";
+
+// Billing
+export {
+  normalizeRateToMicrosPerMillion, calculateChargeMicros, resolveBillingRate, assertApiKeyCanUse,
+  getBillingOverview, getApiKeyLedger, applyTopup, applyAdjustment, applyUsageDebit,
+} from "./repos/billingRepo.js";
 
 // Aliases (model + custom + mitm)
 export {
@@ -77,8 +83,9 @@ export async function exportDb() {
     providerConnections: db.all(`SELECT * FROM providerConnections`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, provider: r.provider, authType: r.authType, name: r.name, email: r.email, priority: r.priority, isActive: r.isActive === 1, createdAt: r.createdAt, updatedAt: r.updatedAt })),
     providerNodes: db.all(`SELECT * FROM providerNodes`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, type: r.type, name: r.name, createdAt: r.createdAt, updatedAt: r.updatedAt })),
     proxyPools: db.all(`SELECT * FROM proxyPools`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, isActive: r.isActive === 1, testStatus: r.testStatus, createdAt: r.createdAt, updatedAt: r.updatedAt })),
-    apiKeys: db.all(`SELECT * FROM apiKeys`).map((r) => ({ id: r.id, key: r.key, name: r.name, machineId: r.machineId, isActive: r.isActive === 1, createdAt: r.createdAt })),
-    combos: db.all(`SELECT * FROM combos`).map((r) => ({ id: r.id, name: r.name, kind: r.kind, models: parseJson(r.models, []), createdAt: r.createdAt, updatedAt: r.updatedAt })),
+    apiKeys: db.all(`SELECT * FROM apiKeys`).map((r) => ({ id: r.id, key: r.key, name: r.name, machineId: r.machineId, isActive: r.isActive === 1, createdAt: r.createdAt, creditBalance:r.creditBalance||0,totalTopup:r.totalTopup||0,totalSpent:r.totalSpent||0,allowedModels:parseJson(r.allowedModels,[]),allowedCombos:parseJson(r.allowedCombos,[]),notes:r.notes||null,updatedAt:r.updatedAt||r.createdAt })),
+    combos: db.all(`SELECT * FROM combos`).map((r) => ({ id: r.id, name: r.name, kind: r.kind, models: parseJson(r.models, []), pricing:parseJson(r.pricing,null), createdAt: r.createdAt, updatedAt: r.updatedAt })),
+    billingLedger: db.all(`SELECT * FROM billingLedger`).map((r) => ({...r,tokens:parseJson(r.tokens,{})})),
     modelAliases: {},
     customModels: [],
     mitmAlias: {},
@@ -105,6 +112,7 @@ export async function importDb(payload) {
     db.run(`DELETE FROM providerConnections`);
     db.run(`DELETE FROM providerNodes`);
     db.run(`DELETE FROM proxyPools`);
+    db.run(`DELETE FROM billingLedger`);
     db.run(`DELETE FROM apiKeys`);
     db.run(`DELETE FROM combos`);
     db.run(`DELETE FROM kv WHERE scope IN ('modelAliases', 'customModels', 'mitmAlias', 'pricing')`);
@@ -137,15 +145,18 @@ export async function importDb(payload) {
     }
     for (const k of payload.apiKeys || []) {
       db.run(
-        `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt) VALUES(?, ?, ?, ?, ?, ?)`,
-        [k.id, k.key, k.name || null, k.machineId || null, k.isActive === false ? 0 : 1, k.createdAt || new Date().toISOString()]
+        `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt, creditBalance, totalTopup, totalSpent, allowedModels, allowedCombos, notes, updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [k.id, k.key, k.name || null, k.machineId || null, k.isActive === false ? 0 : 1, k.createdAt || new Date().toISOString(), k.creditBalance||0,k.totalTopup||0,k.totalSpent||0,stringifyJson(k.allowedModels||[]),stringifyJson(k.allowedCombos||[]),k.notes||null,k.updatedAt||k.createdAt||new Date().toISOString()]
       );
     }
     for (const c of payload.combos || []) {
       db.run(
-        `INSERT OR REPLACE INTO combos(id, name, kind, models, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?)`,
-        [c.id, c.name, c.kind || null, stringifyJson(c.models || []), c.createdAt || new Date().toISOString(), c.updatedAt || new Date().toISOString()]
+        `INSERT OR REPLACE INTO combos(id, name, kind, models, pricing, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+        [c.id, c.name, c.kind || null, stringifyJson(c.models || []), stringifyJson(c.pricing||null), c.createdAt || new Date().toISOString(), c.updatedAt || new Date().toISOString()]
       );
+    }
+    for (const l of payload.billingLedger || []) {
+      db.run(`INSERT OR REPLACE INTO billingLedger(id,apiKeyId,type,amount,currency,calculatedAmount,billingModel,requestedModel,comboId,usageHistoryId,requestId,tokens,description,createdBy,createdAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [l.id,l.apiKeyId,l.type,l.amount,l.currency||"USD",l.calculatedAmount??null,l.billingModel||null,l.requestedModel||null,l.comboId||null,l.usageHistoryId||null,l.requestId||null,stringifyJson(l.tokens||{}),l.description||null,l.createdBy||null,l.createdAt||new Date().toISOString()]);
     }
     for (const [a, m] of Object.entries(payload.modelAliases || {})) {
       db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('modelAliases', ?, ?)`, [a, stringifyJson(m)]);

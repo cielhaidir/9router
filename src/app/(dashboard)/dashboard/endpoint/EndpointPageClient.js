@@ -24,6 +24,9 @@ export default function APIPageClient({ machineId }) {
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKey, setCreatedKey] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
+  const [billingKey, setBillingKey] = useState(null);
+  const [topupAmount, setTopupAmount] = useState("");
+  const [ledger, setLedger] = useState([]);
 
   const [requireApiKey, setRequireApiKey] = useState(false);
   const [requireLogin, setRequireLogin] = useState(true);
@@ -251,6 +254,17 @@ export default function APIPageClient({ machineId }) {
     } catch (error) {
       console.log("Error updating requireApiKey:", error);
     }
+  };
+
+  const openBilling = async (key) => {
+    setBillingKey(key); setLedger([]);
+    const response = await fetch(`/api/keys/${key.id}/ledger`);
+    if (response.ok) setLedger((await response.json()).ledger || []);
+  };
+  const addTopup = async () => {
+    if (!billingKey || !topupAmount) return;
+    const response = await fetch(`/api/keys/${billingKey.id}/topups`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountUsd: topupAmount }) });
+    if (response.ok) { setTopupAmount(""); await fetchData(); await openBilling(billingKey); }
   };
 
   const fetchData = async () => {
@@ -1021,14 +1035,14 @@ export default function APIPageClient({ machineId }) {
                       </span>
                     </button>
                   </div>
-                  <p className="text-xs text-text-muted mt-1">
-                    Created {new Date(key.createdAt).toLocaleDateString()}
-                  </p>
+                  <p className="text-xs text-text-muted mt-1">Created {new Date(key.createdAt).toLocaleDateString()} · Balance ${(Number(key.creditBalance || 0) / 1_000_000).toFixed(2)} · Top-up ${(Number(key.totalTopup || 0) / 1_000_000).toFixed(2)} · Spent ${(Number(key.totalSpent || 0) / 1_000_000).toFixed(2)}</p>
+                  <p className="text-xs text-text-muted">Direct grants: {(key.allowedModels || []).length} · Combo grants: {(key.allowedCombos || []).length}</p>
                   {key.isActive === false && (
                     <p className="text-xs text-orange-500 mt-1">Paused</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => openBilling(key)}>Manage billing</Button>
                   <Toggle
                     size="sm"
                     checked={key.isActive ?? true}
@@ -1060,6 +1074,10 @@ export default function APIPageClient({ machineId }) {
           </div>
         )}
       </Card>
+
+      <Modal isOpen={!!billingKey} title={`Billing: ${billingKey?.name || ""}`} onClose={() => setBillingKey(null)}>
+        <div className="flex flex-col gap-3"><p className="text-sm">Balance: ${((billingKey?.creditBalance || 0) / 1_000_000).toFixed(2)}</p><div className="flex gap-2"><Input value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} placeholder="12.500000" /><Button onClick={addTopup}>Top up</Button></div><p className="text-xs text-text-muted">Use a decimal USD amount. Ledger never exposes this API key value.</p><div className="max-h-56 overflow-auto text-xs">{ledger.map((entry) => <div className="border-b py-2" key={entry.id}>{entry.type}: ${(entry.amount / 1_000_000).toFixed(6)} · {entry.requestedModel || entry.description || ""}</div>)}</div></div>
+      </Modal>
 
       {/* Add Key Modal */}
       <Modal

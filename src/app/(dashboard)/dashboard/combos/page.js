@@ -457,6 +457,13 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState("");
   const [modelAliases, setModelAliases] = useState({});
+  const [pricingEnabled, setPricingEnabled] = useState(!!combo?.pricing);
+  const [pricing, setPricing] = useState(() => ({
+    input: combo?.pricing ? String((combo.pricing.inputMicrosPerMillion || 0) / 1_000_000) : "",
+    output: combo?.pricing ? String((combo.pricing.outputMicrosPerMillion || 0) / 1_000_000) : "",
+    cached: combo?.pricing ? String((combo.pricing.cachedMicrosPerMillion || 0) / 1_000_000) : "",
+    reasoning: combo?.pricing ? String((combo.pricing.reasoningMicrosPerMillion || 0) / 1_000_000) : "",
+  }));
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -543,7 +550,7 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   const handleSave = async () => {
     if (!validateName(name)) return;
     setSaving(true);
-    await onSave({ name: name.trim(), models });
+    await onSave({ name: name.trim(), models, pricing: pricingEnabled ? { ...pricing, enabled: true } : null });
     setSaving(false);
   };
 
@@ -615,6 +622,12 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
               <span className="material-symbols-outlined text-[16px]">add</span>
               Add Model
             </button>
+          </div>
+
+          <div className="rounded-lg border border-black/10 p-3 dark:border-white/10">
+            <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={pricingEnabled} onChange={(e) => setPricingEnabled(e.target.checked)} /> Bill requests using this combo</label>
+            <p className="mt-1 text-xs text-text-muted">This public combo rate is charged even if a fallback member serves the request. USD per 1M tokens.</p>
+            {pricingEnabled && <div className="mt-2 grid grid-cols-2 gap-2">{["input", "output", "cached", "reasoning"].map((field) => <Input key={field} label={field} value={pricing[field]} placeholder="0.00" onChange={(e) => setPricing({ ...pricing, [field]: e.target.value })} />)}</div>}
           </div>
 
           {/* Actions */}
