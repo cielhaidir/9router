@@ -1,3 +1,9 @@
+# Unreleased
+
+## Features
+- **Billing**: managed API-key balances, model/combo grants, immutable ledger, top-ups and adjustments
+- **Billing**: optional per-combo input/output/cached/reasoning rates with successful-request debit auditing
+
 # v0.5.40 (2026-07-20)
 
 ## Features

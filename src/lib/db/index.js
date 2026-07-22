@@ -40,7 +40,7 @@ export {
 
 // Billing
 export {
-  normalizeRateToMicrosPerMillion, calculateChargeMicros, resolveBillingRate, assertApiKeyCanUse,
+  parseUsdMicros, normalizeRateToMicrosPerMillion, calculateChargeMicros, resolveBillingRate, assertApiKeyCanUse,
   getBillingOverview, getApiKeyLedger, applyTopup, applyAdjustment, applyUsageDebit,
 } from "./repos/billingRepo.js";
 

@@ -25,6 +25,7 @@ export async function POST(request) {
     const allowedFields = new Set(["name", "models", "kind", "pricing"]);
     if (Object.keys(body).some((key) => !allowedFields.has(key))) return NextResponse.json({ error: "Unsupported combo fields" }, { status: 400 });
     if (pricing !== undefined && pricing !== null && (typeof pricing !== "object" || Array.isArray(pricing))) return NextResponse.json({ error: "Invalid pricing" }, { status: 400 });
+    if (pricing != null && kind && kind !== "llm") return NextResponse.json({ error: "Pricing is only supported for LLM combos" }, { status: 400 });
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -46,6 +47,6 @@ export async function POST(request) {
     return NextResponse.json(combo, { status: 201 });
   } catch (error) {
     console.log("Error creating combo:", error);
-    return NextResponse.json({ error: "Failed to create combo" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to create combo" }, { status: 400 });
   }
 }

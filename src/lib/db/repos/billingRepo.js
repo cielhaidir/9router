@@ -6,13 +6,22 @@ const MICRO_USD = 1_000_000;
 const token = (value) => Math.max(0, Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0);
 
 /** Convert a decimal USD-per-million string to exact micro-USD. */
+export function parseUsdMicros(value, { signed = false } = {}) {
+  const pattern = signed ? /^-?\d+(?:\.\d{1,6})?$/ : /^\d+(?:\.\d{1,6})?$/;
+  if (typeof value !== "string" || !pattern.test(value.trim())) throw new Error("Amount must be a decimal string with at most 6 places");
+  const raw = value.trim();
+  const negative = raw.startsWith("-");
+  const [whole, fraction = ""] = (negative ? raw.slice(1) : raw).split(".");
+  const amount = BigInt(whole) * BigInt(MICRO_USD) + BigInt((fraction + "000000").slice(0, 6));
+  const result = negative ? -amount : amount;
+  if (result > BigInt(Number.MAX_SAFE_INTEGER) || result < BigInt(Number.MIN_SAFE_INTEGER)) throw new Error("Amount is unsafe");
+  return Number(result);
+}
+
 export function normalizeRateToMicrosPerMillion(value) {
   if (typeof value === "number") value = String(value);
-  if (typeof value !== "string" || !/^\d+(?:\.\d{1,6})?$/.test(value.trim())) throw new Error("Rate must be a non-negative decimal with at most 6 places");
-  const [whole, fraction = ""] = value.trim().split(".");
-  const result = BigInt(whole) * BigInt(MICRO_USD) + BigInt((fraction + "000000").slice(0, 6));
-  if (result > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Rate is unsafe");
-  return Number(result);
+  try { return parseUsdMicros(value); }
+  catch { throw new Error("Rate must be a non-negative decimal with at most 6 places"); }
 }
 
 export function calculateChargeMicros(tokens = {}, rate = {}) {
@@ -26,14 +35,15 @@ export function calculateChargeMicros(tokens = {}, rate = {}) {
 }
 
 export function resolveBillingRate({ combo, provider, model, pricing }) {
-  if (combo?.pricing?.enabled !== false) return combo?.pricing || null;
+  if (combo?.pricing && combo.pricing.enabled !== false) return combo.pricing;
   const p = pricing || null;
   if (!p) return null;
+  const normalize = (micros, decimal) => micros != null ? token(micros) : (decimal == null ? 0 : normalizeRateToMicrosPerMillion(decimal));
   return {
-    inputMicrosPerMillion: token(p.inputMicrosPerMillion ?? p.input * MICRO_USD),
-    outputMicrosPerMillion: token(p.outputMicrosPerMillion ?? p.output * MICRO_USD),
-    cachedMicrosPerMillion: token(p.cachedMicrosPerMillion ?? p.cached * MICRO_USD),
-    reasoningMicrosPerMillion: token(p.reasoningMicrosPerMillion ?? p.reasoning * MICRO_USD),
+    inputMicrosPerMillion: normalize(p.inputMicrosPerMillion, p.input),
+    outputMicrosPerMillion: normalize(p.outputMicrosPerMillion, p.output),
+    cachedMicrosPerMillion: normalize(p.cachedMicrosPerMillion, p.cached),
+    reasoningMicrosPerMillion: normalize(p.reasoningMicrosPerMillion, p.reasoning),
   };
 }
 
@@ -47,7 +57,11 @@ export function assertApiKeyCanUse({ apiKey, requestedModel, isCombo }) {
   return true;
 }
 
-function ledgerRow(row) { return row && { ...row, tokens: parseJson(row.tokens, {}) }; }
+function ledgerRow(row) {
+  if (!row) return null;
+  const { apiKey, ...safe } = row;
+  return { ...safe, tokens: parseJson(row.tokens, {}) };
+}
 function keyExists(db, id) { return db.get("SELECT id FROM apiKeys WHERE id = ?", [id]); }
 async function mutate(apiKeyId, amount, type, { description = null, createdBy = null } = {}) {
   if (!Number.isSafeInteger(amount) || (type === "topup" ? amount <= 0 : amount === 0)) throw new Error("Invalid amount");

@@ -20,15 +20,18 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { name, allowedModels, allowedCombos, notes } = body;
+    const allowedFields = new Set(["name", "allowedModels", "allowedCombos", "notes"]);
+    if (Object.keys(body).some((key) => !allowedFields.has(key))) return NextResponse.json({ error: "Unsupported key fields" }, { status: 400 });
+    for (const list of [allowedModels, allowedCombos]) if (list !== undefined && (!Array.isArray(list) || list.some((value) => typeof value !== "string" || !value.trim()) || new Set(list).size !== list.length)) return NextResponse.json({ error: "Allowlists must contain unique non-empty strings" }, { status: 400 });
+    if (notes !== undefined && (typeof notes !== "string" || notes.length > 1000)) return NextResponse.json({ error: "Invalid notes" }, { status: 400 });
 
-    if (!name) {
+    if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
     // Always get machineId from server
     const machineId = await getConsistentMachineId();
-    if ((allowedModels !== undefined && !Array.isArray(allowedModels)) || (allowedCombos !== undefined && !Array.isArray(allowedCombos))) return NextResponse.json({ error: "Allowlists must be arrays" }, { status: 400 });
-    const apiKey = await createApiKey(name, machineId, { allowedModels, allowedCombos, notes });
+    const apiKey = await createApiKey(name.trim(), machineId, { allowedModels, allowedCombos, notes });
 
     return NextResponse.json({
       key: apiKey.key,

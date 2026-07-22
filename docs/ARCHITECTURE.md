@@ -14,7 +14,7 @@ Core capabilities:
 - Model combo fallback (multi-model sequence)
 - Account-level fallback (multi-account per provider)
 - OAuth + API-key provider connection management
-- Local persistence for providers, keys, aliases, combos, settings, pricing
+- SQLite persistence for providers, keys, aliases, combos, settings, pricing, and billing ledger
 - Usage/cost tracking and request logging
 - Optional cloud sync for multi-device/state sync
 
@@ -22,6 +22,12 @@ Primary runtime model:
 
 - Next.js app routes under `src/app/api/*` implement both dashboard APIs and compatibility APIs
 - A shared SSE/routing core in `src/sse/*` + `open-sse/*` handles provider execution, translation, streaming, fallback, and usage
+
+## Persistence and billing
+
+Persistent gateway state is SQLite under `src/lib/db/`, using `bun:sqlite`, `better-sqlite3`, `node:sqlite`, or `sql.js` in that fallback order. The database path is `DATA_DIR` or `~/.9router/`; legacy `db.json` is imported once for migration compatibility. Usage logs remain separate under `~/.9router`.
+
+Managed client keys store integer micro-USD balance, top-up and spend totals, direct-model/combo allowlists, and notes. `billingLedger` is immutable: top-ups and adjustments change balance atomically, while a successful request is debited once only after normalized usage is persisted. Combo pricing overrides provider-model prices by public combo name; failed fallback attempts are not billed. A post-response debit is clamped to available positive credit and retains its calculated amount for auditability.
 
 ## Scope and Boundaries
 
@@ -56,7 +62,7 @@ flowchart LR
         API[V1 Compatibility API\n/v1/*]
         DASH[Dashboard + Management API\n/api/*]
         CORE[SSE + Translation Core\nopen-sse + src/sse]
-        DB[(db.json)]
+        DB[(SQLite data.sqlite)]
         UDB[(usage.json + log.txt)]
     end
 

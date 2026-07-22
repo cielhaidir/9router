@@ -1,3 +1,15 @@
-import { NextResponse } from "next/server"; import { applyTopup } from "@/lib/db/index.js";
-const micros=(v)=>{if(typeof v!=="string"||!/^\d+(?:\.\d{1,6})?$/.test(v))throw Error("amountUsd must be a decimal string");const[a,b=""]=v.split(".");return Number(BigInt(a)*1000000n+BigInt((b+"000000").slice(0,6)));};
-export async function POST(request,{params}){try{const {id}=await params;const b=await request.json();const ledger=await applyTopup(id,micros(b.amountUsd),{description:typeof b.description==="string"?b.description:null});return NextResponse.json({ledger},{status:201});}catch(e){return NextResponse.json({error:e.message},{status:e.message==="API key not found"?404:400});}}
+import { NextResponse } from "next/server";
+import { applyTopup, parseUsdMicros } from "@/lib/db/index.js";
+
+export async function POST(request, { params }) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    if (Object.keys(body).some((key) => !["amountUsd", "description"].includes(key))) throw new Error("Unsupported fields");
+    if (body.description !== undefined && (typeof body.description !== "string" || body.description.length > 1000)) throw new Error("Invalid description");
+    const ledger = await applyTopup(id, parseUsdMicros(body.amountUsd), { description: body.description || null });
+    return NextResponse.json({ ledger }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: error.message === "API key not found" ? 404 : 400 });
+  }
+}

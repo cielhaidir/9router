@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateChargeMicros, normalizeRateToMicrosPerMillion, assertApiKeyCanUse } from "@/lib/db/repos/billingRepo.js";
+import { calculateChargeMicros, normalizeRateToMicrosPerMillion, parseUsdMicros, assertApiKeyCanUse } from "@/lib/db/repos/billingRepo.js";
 
 describe("billing arithmetic", () => {
   const rate = { inputMicrosPerMillion: 2_000_000, cachedMicrosPerMillion: 200_000, outputMicrosPerMillion: 10_000_000, reasoningMicrosPerMillion: 10_000_000 };
@@ -9,9 +9,12 @@ describe("billing arithmetic", () => {
   it("clamps invalid cached values and handles missing rates", () => {
     expect(calculateChargeMicros({ prompt_tokens: 10, cached_tokens: 99 }, {})).toBe(0);
   });
-  it("parses exact decimal rates without floats", () => {
+  it("parses exact decimal rates and money without floats", () => {
     expect(normalizeRateToMicrosPerMillion("2.500001")).toBe(2_500_001);
+    expect(parseUsdMicros("12.500000")).toBe(12_500_000);
+    expect(parseUsdMicros("-0.1", { signed: true })).toBe(-100_000);
     expect(() => normalizeRateToMicrosPerMillion("1.0000001")).toThrow();
+    expect(() => parseUsdMicros("9007199255.000000")).toThrow();
   });
 });
 

@@ -50,6 +50,9 @@ export async function PUT(request, { params }) {
     
     // Capture previous name to invalidate rotation state on rename
     const prev = await getComboById(id);
+    if ((body.pricing != null || (body.kind && body.kind !== "llm" && prev?.pricing)) && (body.kind || prev?.kind || "llm") !== "llm") {
+      return NextResponse.json({ error: "Pricing is only supported for LLM combos" }, { status: 400 });
+    }
     const combo = await updateCombo(id, body);
     
     if (!combo) {
@@ -63,7 +66,7 @@ export async function PUT(request, { params }) {
     return NextResponse.json(combo);
   } catch (error) {
     console.log("Error updating combo:", error);
-    return NextResponse.json({ error: "Failed to update combo" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to update combo" }, { status: 400 });
   }
 }
 

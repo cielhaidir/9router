@@ -1,5 +1,5 @@
 // Add managed API-key billing. All money is integer micro-USD.
-export default {
+const migration = {
   version: 2,
   name: "billing",
   up(db) {
@@ -28,3 +28,5 @@ export default {
     db.exec("UPDATE apiKeys SET creditBalance=COALESCE(creditBalance,0), totalTopup=COALESCE(totalTopup,0), totalSpent=COALESCE(totalSpent,0), allowedModels=COALESCE(allowedModels,'[]'), allowedCombos=COALESCE(allowedCombos,'[]'), updatedAt=CASE WHEN updatedAt='' THEN createdAt ELSE updatedAt END");
   },
 };
+
+export default migration;
