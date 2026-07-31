@@ -69,9 +69,7 @@ export class GeminiCLIService {
         headers: {
           "Authorization": `Bearer ${accessToken}`,
           "Content-Type": "application/json",
-          "User-Agent": "google-api-nodejs-client/9.15.1",
-          "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-          "Client-Metadata": JSON.stringify(getOAuthClientMetadata())
+          "User-Agent": "antigravity/ide/2.1.1 darwin/arm64",
         },
         body: JSON.stringify({
           metadata: getOAuthClientMetadata(),
