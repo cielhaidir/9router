@@ -50,8 +50,11 @@ export function resolveBillingRate({ combo, provider, model, pricing }) {
 export function assertApiKeyCanUse({ apiKey, requestedModel, isCombo }) {
   if (!apiKey?.isActive) throw new Error("API key is disabled");
   if (Number(apiKey.creditBalance) <= 0) throw new Error("insufficient credit balance");
-  const allowed = isCombo ? apiKey.allowedCombos : apiKey.allowedModels;
-  if (Array.isArray(allowed) && allowed.length && !allowed.includes(requestedModel)) {
+  const allowedModels = Array.isArray(apiKey.allowedModels) ? apiKey.allowedModels : [];
+  const allowedCombos = Array.isArray(apiKey.allowedCombos) ? apiKey.allowedCombos : [];
+  const hasPolicy = allowedModels.length > 0 || allowedCombos.length > 0;
+  const allowed = isCombo ? allowedCombos : allowedModels;
+  if (hasPolicy && !allowed.includes(requestedModel)) {
     throw new Error(isCombo ? "requested combo is not allowed for this API key" : "requested model is not allowed for this API key");
   }
   return true;

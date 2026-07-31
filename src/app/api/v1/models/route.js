@@ -6,6 +6,8 @@ import {
   isOpenAICompatibleProvider,
 } from "@/shared/constants/providers";
 import { getProviderConnections, getCombos, getCustomModels, getModelAliases } from "@/lib/localDb";
+import { getApiKeyByValue } from "@/lib/db/index.js";
+import { extractApiKey } from "@/sse/services/auth.js";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveKimchiModels } from "open-sse/services/kimchiModels.js";
@@ -237,6 +239,19 @@ function comboMatchesKinds(combo, kindFilter) {
   return kindFilter.includes(kind);
 }
 
+export function filterModelsForApiKey(models, apiKey) {
+  if (!apiKey) return models;
+  const allowedModels = Array.isArray(apiKey.allowedModels) ? apiKey.allowedModels : [];
+  const allowedCombos = Array.isArray(apiKey.allowedCombos) ? apiKey.allowedCombos : [];
+  const hasPolicy = allowedModels.length > 0 || allowedCombos.length > 0;
+  if (!hasPolicy) return models;
+  const modelSet = new Set(allowedModels);
+  const comboSet = new Set(allowedCombos);
+  return models.filter((entry) => entry?.owned_by === "combo"
+    ? comboSet.has(entry.id)
+    : modelSet.has(entry.id));
+}
+
 /**
  * Build OpenAI-format models list filtered by service kinds.
  * @param {string[]} kindFilter - List of service kinds to include (e.g. ["llm"], ["webSearch","webFetch"]).
@@ -291,6 +306,16 @@ export async function buildModelsList(kindFilter, options = {}) {
   }
 
   const models = [];
+  const apiKey = options.apiKey || null;
+  const allowedModels = Array.isArray(apiKey?.allowedModels) ? apiKey.allowedModels : [];
+  const allowedCombos = Array.isArray(apiKey?.allowedCombos) ? apiKey.allowedCombos : [];
+  const hasApiKeyPolicy = allowedModels.length > 0 || allowedCombos.length > 0;
+  const isAllowedCatalogEntry = (entry) => {
+    if (!hasApiKeyPolicy) return true;
+    return entry?.owned_by === "combo"
+      ? allowedCombos.includes(entry.id)
+      : allowedModels.includes(entry.id);
+  };
 
   // Combos first (filtered by kind). Web combos expose `kind` so AI knows search vs fetch.
   for (const combo of combos) {
@@ -303,7 +328,7 @@ export async function buildModelsList(kindFilter, options = {}) {
     if (combo.kind === "webSearch" || combo.kind === "webFetch") {
       entry.kind = combo.kind;
     }
-    models.push(entry);
+    if (isAllowedCatalogEntry(entry)) models.push(entry);
   }
 
   if (connections.length === 0) {
@@ -517,7 +542,7 @@ export async function buildModelsList(kindFilter, options = {}) {
     dedupedModels.push(model);
   }
 
-  return dedupedModels;
+  return dedupedModels.filter(isAllowedCatalogEntry);
 }
 
 /**
@@ -541,7 +566,12 @@ export async function GET(request) {
   try {
     // Detect cross-instance recursive /models fetch (another 9router fetching our /models)
     const skipDynamicFetch = request?.headers?.get(INTERNAL_MODELS_FETCH_HEADER) === "1";
-    const data = await buildModelsList([LLM_KIND], { skipDynamicFetch });
+    const rawApiKey = extractApiKey(request);
+    const apiKey = rawApiKey ? await getApiKeyByValue(rawApiKey) : null;
+    if (rawApiKey && !apiKey) {
+      return Response.json({ error: { message: "Invalid API key", type: "authentication_error" } }, { status: 401, headers: { "Access-Control-Allow-Origin": "*" } });
+    }
+    const data = await buildModelsList([LLM_KIND], { skipDynamicFetch, apiKey });
     return Response.json({ object: "list", data }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });

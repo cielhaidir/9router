@@ -25,4 +25,9 @@ describe("key policy", () => {
     expect(() => assertApiKeyCanUse({ apiKey: key, requestedModel: "combo", isCombo: true })).not.toThrow();
     expect(() => assertApiKeyCanUse({ apiKey: key, requestedModel: "a", isCombo: true })).toThrow("combo");
   });
+  it("denies direct models when only combos are allowlisted", () => {
+    const key = { isActive: true, creditBalance: 1, allowedModels: [], allowedCombos: ["combo"] };
+    expect(() => assertApiKeyCanUse({ apiKey: key, requestedModel: "provider/model", isCombo: false })).toThrow("model");
+    expect(() => assertApiKeyCanUse({ apiKey: key, requestedModel: "combo", isCombo: true })).not.toThrow();
+  });
 });
