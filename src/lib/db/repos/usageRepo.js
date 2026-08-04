@@ -347,7 +347,20 @@ function loadDaysInRange(adapter, maxDays) {
   return adapter.all(`SELECT dateKey, data FROM usageDaily WHERE dateKey >= ?`, [cutoffKey]);
 }
 
-export async function getUsageStats(period = "all") {
+export function filterUsageRowsByHourRange(rows, hourStart, hourEnd) {
+  if (hourStart == null || hourEnd == null) return rows;
+  const start = Number(hourStart);
+  const end = Number(hourEnd);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start > 23 || end < 1 || end > 24 || start >= end) {
+    return rows;
+  }
+  return rows.filter((row) => {
+    const hour = new Date(row.timestamp).getHours();
+    return hour >= start && hour < end;
+  });
+}
+
+export async function getUsageStats(period = "all", hourStart = null, hourEnd = null) {
   const db = await getAdapter();
 
   const [{ getProviderConnections }, { getApiKeys }, { getProviderNodes }] = await Promise.all([
@@ -447,7 +460,8 @@ export async function getUsageStats(period = "all") {
     }
   }
 
-  const useDailySummary = period !== "24h" && period !== "today";
+  // Hour filtering needs request-level timestamps; daily summaries do not retain them.
+  const useDailySummary = period !== "24h" && period !== "today" && hourStart == null && hourEnd == null;
 
   if (useDailySummary) {
     const periodDays = { "7d": 7, "30d": 30, "60d": 60 };
@@ -575,12 +589,13 @@ export async function getUsageStats(period = "all") {
       startOfDay.setHours(0, 0, 0, 0);
       cutoff = startOfDay.toISOString();
     } else {
-      cutoff = new Date(Date.now() - PERIOD_MS["24h"]).toISOString();
+      const periodDays = { "7d": 7, "30d": 30, "60d": 60 };
+      cutoff = new Date(Date.now() - (periodDays[period] || 1) * 86400000).toISOString();
     }
-    const filtered = db.all(
+    const filtered = filterUsageRowsByHourRange(db.all(
       `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, tokens FROM usageHistory WHERE timestamp >= ?`,
       [cutoff]
-    );
+    ), hourStart, hourEnd);
 
     for (const r of filtered) {
       const tokens = parseJson(r.tokens, {}) || {};

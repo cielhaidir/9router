@@ -200,7 +200,7 @@ const PERIODS = [
   { value: "60d", label: "60D" },
 ];
 
-export default function UsageStats({ period: periodProp, setPeriod: setPeriodProp, hidePeriodSelector = false } = {}) {
+export default function UsageStats({ period: periodProp, setPeriod: setPeriodProp, hourStart = null, hourEnd = null, hidePeriodSelector = false } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -261,7 +261,12 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
       setFetching(true);
     }
 
-    fetch(`/api/usage/stats?period=${period}`)
+    const params = new URLSearchParams({ period });
+    if (hourStart != null && hourEnd != null) {
+      params.set("hourStart", hourStart);
+      params.set("hourEnd", hourEnd);
+    }
+    fetch(`/api/usage/stats?${params}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data) {
@@ -274,7 +279,7 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
         setLoading(false);
         setFetching(false);
       });
-  }, [period]);
+  }, [period, hourStart, hourEnd]);
 
   // SSE connection - real-time updates for activeRequests + recentRequests only
   useEffect(() => {
