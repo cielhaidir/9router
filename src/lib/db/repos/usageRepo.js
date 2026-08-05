@@ -352,7 +352,7 @@ export function filterUsageRowsByHourRange(rows, hourStart, hourEnd) {
   const start = Number(hourStart);
   const end = Number(hourEnd);
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start > 23 || end < 1 || end > 24 || start >= end) {
-    return rows;
+    return [];
   }
   return rows.filter((row) => {
     const hour = new Date(row.timestamp).getHours();
