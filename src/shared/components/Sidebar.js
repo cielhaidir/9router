@@ -21,8 +21,7 @@ const navItems = [
   { href: "/dashboard/endpoint", label: "Endpoint & Key", icon: "api" },
   { href: "/dashboard/providers", label: "Providers", icon: "dns" },
   // { href: "/dashboard/basic-chat", label: "Basic Chat", icon: "chat" }, // Hidden
-  { href: "/dashboard/combos", label: "Combos", icon: "layers" },
-  { href: "/dashboard/api-keys", label: "Managed Keys", icon: "key" },
+  { href: "/dashboard/combos", label: "Combo & Vision Adapter", icon: "layers" },
   { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
   { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
   { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
@@ -343,6 +342,22 @@ export default function Sidebar({ onClose }) {
                 settings
               </span>
               <span className="text-[13px] font-medium">Settings</span>
+            </Link>
+
+            {/* Managed Keys (custom billing) */}
+            <Link
+              href="/dashboard/api-keys"
+              onClick={onClose}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive("/dashboard/api-keys")
+                  ? "bg-accent text-accent-foreground"
+                  : "text-text-muted hover:bg-accent/50 hover:text-text"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                vpn_key
+              </span>
+              <span className="text-[13px] font-medium">Managed Keys</span>
             </Link>
           </div>
         </nav>

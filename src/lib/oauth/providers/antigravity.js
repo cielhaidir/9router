@@ -39,7 +39,6 @@ const antigravity = {
     return await response.json();
   },
   postExchange: async (tokens) => {
-    // Numeric enums matching Antigravity binary ClientMetadata
     const loadHeaders = {
       "Authorization": `Bearer ${tokens.access_token}`,
       "Content-Type": "application/json",
