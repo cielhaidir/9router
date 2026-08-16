@@ -4,6 +4,7 @@
 - **Billing**: managed API-key balances, model/combo grants, immutable ledger, top-ups and adjustments
 - **Billing**: optional per-combo input/output/cached/reasoning rates with micro-USD precision
 - **Dashboard**: managed-key UI at `/dashboard/api-keys` with full lifecycle control
+- **Dashboard**: per-key one-time "Copy" (raw key reveal) and "Rotate" (regenerate value, old key stops working)
 - **Dashboard**: usage overview hour-range filter (`From 09:00 To 14:00`)
 - **Models API**: `/v1/models` respects managed API-key `allowedModels` / `allowedCombos`
 - **Sidebar**: "Managed Keys" navigation entry

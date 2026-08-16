@@ -25,6 +25,8 @@ export default function ApiKeysPage() {
   const [editing, setEditing] = useState(null);
   const [billing, setBilling] = useState(null);
   const [createdKey, setCreatedKey] = useState(null);
+  const [rotatedKey, setRotatedKey] = useState(null);
+  const { copied, copy } = useCopyToClipboard();
 
   const handleFailure = useCallback((err) => {
     if (/\(401\)|unauthorized/i.test(err.message)) router.replace("/login");
@@ -62,6 +64,19 @@ export default function ApiKeysPage() {
       setEditing(null); await load();
     } catch (err) { handleFailure(err); throw err; }
   };
+  const copyKey = async (id) => {
+    try {
+      const data = await fetch(`/api/keys/${id}/reveal`, { method: "POST" }).then(readJson);
+      copy(data.key, id); // Transient: raw value goes straight to the clipboard, never into React state.
+    } catch (err) { handleFailure(err); }
+  };
+  const rotateKey = async (id) => {
+    try {
+      const data = await fetch(`/api/keys/${id}/rotate`, { method: "POST" }).then(readJson);
+      setRotatedKey(data.key); // Deliberately transient: shown once in RawKeyModal, never retained in the key list.
+      await load();
+    } catch (err) { handleFailure(err); }
+  };
 
   if (loading) return <div className="flex flex-col gap-6"><CardSkeleton /><CardSkeleton /></div>;
   return <div className="flex min-w-0 flex-col gap-6 px-1 sm:px-0">
@@ -71,16 +86,18 @@ export default function ApiKeysPage() {
     </div>
     {error && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}<button className="ml-3 underline" onClick={() => setError("")}>Dismiss</button></div>}
     {keys.length === 0 ? <Card><div className="py-12 text-center"><span className="material-symbols-outlined mb-3 text-4xl text-primary">key</span><p className="font-medium">No managed API keys yet</p><p className="mt-1 text-sm text-text-muted">Create a key to assign model access and prepaid credit.</p><Button className="mt-4" icon="add" onClick={() => setCreateOpen(true)}>Create Key</Button></div></Card> :
-      <div className="grid gap-4 xl:grid-cols-2">{keys.map((key) => <KeyCard key={key.id} apiKey={key} onEdit={() => setEditing(key)} onBilling={() => setBilling(key)} />)}</div>}
+      <div className="grid gap-4 xl:grid-cols-2">{keys.map((key) => <KeyCard key={key.id} apiKey={key} copied={copied === key.id} onCopy={() => copyKey(key.id)} onEdit={() => setEditing(key)} onBilling={() => setBilling(key)} onRotate={() => rotateKey(key.id)} />)}</div>}
     {createOpen && <KeyFormModal title="Create Managed Key" models={models} combos={combos} onClose={() => setCreateOpen(false)} onSave={createKey} />}
     {editing && <KeyFormModal title="Edit Managed Key" apiKey={editing} models={models} combos={combos} onClose={() => setEditing(null)} onSave={(data) => updateKey(editing.id, data)} />}
     {billing && <BillingModal apiKey={billing} onClose={() => setBilling(null)} onChanged={load} onFailure={handleFailure} />}
     {createdKey && <RawKeyModal value={createdKey} onClose={() => setCreatedKey(null)} />}
+    {rotatedKey && <RawKeyModal value={rotatedKey} onClose={() => setRotatedKey(null)} />}
   </div>;
 }
 
-function KeyCard({ apiKey, onEdit, onBilling }) {
-  return <Card padding="sm"><div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:justify-between"><div className="min-w-0"><div className="flex items-center gap-2"><span className="material-symbols-outlined text-primary">key</span><h3 className="truncate font-semibold">{apiKey.name}</h3><span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${apiKey.isActive ? "bg-green-500/10 text-green-700 dark:text-green-400" : "bg-red-500/10 text-red-600"}`}>{apiKey.isActive ? "Active" : "Disabled"}</span></div><code className="mt-2 block font-mono text-xs text-text-muted">{apiKey.maskedKey}</code>{apiKey.notes && <p className="mt-2 line-clamp-2 text-xs text-text-muted">{apiKey.notes}</p>}</div><div className="grid grid-cols-3 gap-3 text-right text-xs"><Metric label="Balance" value={dollars(apiKey.creditBalance)} /><Metric label="Top up" value={dollars(apiKey.totalTopup)} /><Metric label="Spent" value={dollars(apiKey.totalSpent)} /></div></div><div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle pt-3"><p className="text-xs text-text-muted">{apiKey.allowedModels?.length || 0} direct models · {apiKey.allowedCombos?.length || 0} combos</p><div className="flex gap-2"><Button size="sm" variant="secondary" icon="edit" onClick={onEdit}>Edit</Button><Button size="sm" variant="outline" icon="account_balance_wallet" onClick={onBilling}>Billing</Button></div></div></Card>;
+function KeyCard({ apiKey, copied, onCopy, onEdit, onBilling, onRotate }) {
+  const disabled = !apiKey.isActive;
+  return <Card padding="sm"><div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:justify-between"><div className="min-w-0"><div className="flex items-center gap-2"><span className="material-symbols-outlined text-primary">key</span><h3 className="truncate font-semibold">{apiKey.name}</h3><span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${apiKey.isActive ? "bg-green-500/10 text-green-700 dark:text-green-400" : "bg-red-500/10 text-red-600"}`}>{apiKey.isActive ? "Active" : "Disabled"}</span></div><code className="mt-2 block font-mono text-xs text-text-muted">{apiKey.maskedKey}</code>{apiKey.notes && <p className="mt-2 line-clamp-2 text-xs text-text-muted">{apiKey.notes}</p>}</div><div className="grid grid-cols-3 gap-3 text-right text-xs"><Metric label="Balance" value={dollars(apiKey.creditBalance)} /><Metric label="Top up" value={dollars(apiKey.totalTopup)} /><Metric label="Spent" value={dollars(apiKey.totalSpent)} /></div></div><div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle pt-3"><p className="text-xs text-text-muted">{apiKey.allowedModels?.length || 0} direct models · {apiKey.allowedCombos?.length || 0} combos</p><div className="flex gap-2"><Button size="sm" variant="secondary" icon={copied ? "check" : "content_copy"} disabled={disabled} onClick={onCopy}>{copied ? "Copied" : "Copy"}</Button><Button size="sm" variant="outline" icon="refresh" disabled={disabled} onClick={onRotate}>Rotate</Button><Button size="sm" variant="secondary" icon="edit" onClick={onEdit}>Edit</Button><Button size="sm" variant="outline" icon="account_balance_wallet" onClick={onBilling}>Billing</Button></div></div></Card>;
 }
 function Metric({ label, value }) { return <div><p className="text-text-muted">{label}</p><p className="mt-0.5 font-semibold text-text-main">{value}</p></div>; }
 

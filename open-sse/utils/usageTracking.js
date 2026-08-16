@@ -190,7 +190,10 @@ export function canonicalizeUsage(usage) {
     prompt = prompt + cached + cacheCreation;
   } else {
     // OpenAI/Gemini path (or already-canonical input): prompt already includes cached_tokens.
-    cached = num(usage.cached_tokens);
+    // Nested buildUsage() shape (openai-responses translator) carries it inside
+    // prompt_tokens_details.cached_tokens; without this fallback cache reads are
+    // silently stored as 0 while the log line still shows them.
+    cached = num(usage.cached_tokens ?? usage.prompt_tokens_details?.cached_tokens);
   }
 
   const result = {
