@@ -38,6 +38,8 @@ const PATTERN_THINKING = [
   { provider: "codex", pattern: "*gpt-5.6-sol*", levels: [...CODEX_GPT_5_6_LEVELS, "ultra"] },
   { provider: "codex", pattern: "*gpt-5.6-terra*", levels: [...CODEX_GPT_5_6_LEVELS, "ultra"] },
   { provider: "codex", pattern: "*gpt-5.6-luna*", levels: CODEX_GPT_5_6_LEVELS },
+  // chatgpt-web (codex-chatgpt-web bridge): same ChatGPT backend → same level set.
+  { provider: "chatgpt-web", pattern: "*gpt-5.6*", levels: CODEX_GPT_5_6_LEVELS },
   { pattern: "*codex*", levels: ["low", "medium", "high", "xhigh"] }, // codex cannot disable thinking
 ];
 

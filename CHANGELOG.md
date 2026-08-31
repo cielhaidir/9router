@@ -1,6 +1,7 @@
 # Unreleased
 
 ## Features
+- **Providers**: add ChatGPT Web (`chatgpt-web`, alias `cgw`) — a local bridge to a ChatGPT Web session via the Responses API (`http://127.0.0.1:17841`, no API key needed, per-connection base URL override). Models: gpt-5.6-luna / gpt-5.6-sol with reasoning efforts low…max
 - **Billing**: managed API-key balances, model/combo grants, immutable ledger, top-ups and adjustments
 - **Billing**: optional per-combo input/output/cached/reasoning rates with micro-USD precision
 - **Dashboard**: managed-key UI at `/dashboard/api-keys` with full lifecycle control

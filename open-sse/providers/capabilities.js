@@ -138,6 +138,11 @@ export const PROVIDER_CAPABILITIES = {
     "gpt-5.6-luna":              CODEX_GPT_56_DEFAULT_CAPS,
     "gpt-5.6-luna-review":       CODEX_GPT_56_DEFAULT_CAPS,
   },
+  "chatgpt-web": {
+    // Same ChatGPT backend as codex — identical per-model context windows.
+    "gpt-5.6-sol":  CODEX_GPT_56_SOL_CAPS,
+    "gpt-5.6-luna": CODEX_GPT_56_DEFAULT_CAPS,
+  },
   "kiro": {
     "gpt-5.6-sol": KIRO_GPT_5_6_CAPABILITIES,
     "gpt-5.6-terra": KIRO_GPT_5_6_CAPABILITIES,

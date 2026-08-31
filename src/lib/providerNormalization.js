@@ -29,12 +29,13 @@ export function normalizeProviderSpecificData(provider, body = {}, providerSpeci
     ? { ...providerSpecificData }
     : {};
 
-  if (provider === "ollama-local") {
+  if (provider === "ollama-local" || provider === "chatgpt-web") {
     const baseUrl = (
       next.baseUrl ||
       body.baseUrl ||
       body.baseURL ||
       body.ollamaHostUrl ||
+      body.bridgeHostUrl ||
       ""
     ).trim();
 

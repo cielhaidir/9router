@@ -11,9 +11,14 @@ const BULK_PLACEHOLDER = `name1|sk-key1\nname2|sk-key2\nsk-key-only-auto-named`;
 export default function AddApiKeyModal({ isOpen, provider, providerName, isCompatible, isAnthropic, authType, authHint, website, proxyPools, error, existingNames, onSave, onBulkDone, onClose }) {
   const NONE_PROXY_POOL_VALUE = "__none__";
   const isOllamaLocal = provider === "ollama-local";
+  // Local no-auth bridges: optional API key + user-picked base URL (like Ollama).
+  const isLocalBridge = isOllamaLocal || provider === "chatgpt-web";
+  const bridgeUrlLabel = provider === "chatgpt-web" ? "Bridge URL" : "Ollama Host URL";
+  const bridgeUrlPlaceholder = provider === "chatgpt-web" ? "http://127.0.0.1:17841" : "http://localhost:11434";
+  const bridgeName = provider === "chatgpt-web" ? "ChatGPT Web" : "Ollama Local";
   const isCookie = authType === "cookie";
   const isXaiApiKey = provider === "xai" && !isCookie;
-  const credentialLabel = isCookie ? "Cookie Value" : provider === "qoder" ? "Personal Access Token (PAT)" : "API Key";
+  const credentialLabel = isCookie ? "Cookie Value" : provider === "qoder" ? "Personal Access Token (PAT)" : isLocalBridge ? "" : "API Key";
   const credentialPlaceholder = isCookie
     ? (provider === "grok-web" ? "sso=xxxxx... or just the raw value" : "eyJhbGciOi...")
     : (isXaiApiKey ? "xai-..." : provider === "qoder" ? "pt-..." : "");
@@ -30,6 +35,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
     priority: 1,
     proxyPoolId: NONE_PROXY_POOL_VALUE,
     ollamaHostUrl: "",
+    bridgeHostUrl: "",
   });
   const [azureData, setAzureData] = useState({
     azureEndpoint: "",
@@ -53,8 +59,8 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
   const [bulkResult, setBulkResult] = useState(null); // { success, failed }
 
   const buildProviderSpecificData = () => {
-    if (isOllamaLocal && formData.ollamaHostUrl.trim()) {
-      return { baseUrl: formData.ollamaHostUrl.trim() };
+    if (isLocalBridge && formData.bridgeHostUrl.trim()) {
+      return { baseUrl: formData.bridgeHostUrl.trim() };
     }
     if (isAzure) {
       return {
@@ -92,11 +98,8 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
 
   const handleSubmit = async () => {
     if (!provider) return;
-    if (!isOllamaLocal && !formData.apiKey) return;
-    if (!isOllamaLocal) {
-      // Non-ollama providers require a name
-      if (!formData.name) return;
-    }
+    if (!isLocalBridge && !formData.apiKey) return;
+    if (isLocalBridge ? false : !formData.name) return;
     if (isCompatible && !formData.defaultModel.trim()) return;
 
     setSaving(true);
@@ -120,7 +123,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
       }
 
       await onSave({
-        name: formData.name || (isOllamaLocal ? "Ollama Local" : ""),
+        name: formData.name || (isLocalBridge ? bridgeName : ""),
         apiKey: formData.apiKey,
         defaultModel: isCompatible ? formData.defaultModel.trim() : undefined,
         priority: formData.priority,
@@ -188,7 +191,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
   if (!provider) return null;
 
   return (
-    <Modal isOpen={isOpen} title={`Add ${providerName || provider} ${credentialLabel}`} onClose={onClose}>
+    <Modal isOpen={isOpen} title={`Add ${providerName || provider}${credentialLabel ? ` ${credentialLabel}` : ""}`} onClose={onClose}>
       <div className="flex flex-col gap-4">
         {/* Mode switcher */}
         <div className="flex gap-2">
@@ -231,15 +234,15 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
           label="Name"
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder={isOllamaLocal ? "Ollama Local" : "Production Key"}
+          placeholder={isLocalBridge ? bridgeName : "Production Key"}
         />
-        {isOllamaLocal && (
+        {isLocalBridge && (
           <div className="flex gap-2">
             <Input
-              label="Ollama Host URL"
-              value={formData.ollamaHostUrl}
-              onChange={(e) => setFormData({ ...formData, ollamaHostUrl: e.target.value })}
-              placeholder="http://localhost:11434"
+              label={bridgeUrlLabel}
+              value={formData.bridgeHostUrl}
+              onChange={(e) => setFormData({ ...formData, bridgeHostUrl: e.target.value })}
+              placeholder={bridgeUrlPlaceholder}
               className="flex-1"
             />
             <div className="pt-6">
@@ -249,7 +252,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
             </div>
           </div>
         )}
-        {!isOllamaLocal && (
+        {!isLocalBridge && (
           <div className="flex gap-2">
             <Input
               label={credentialLabel}
@@ -300,9 +303,11 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
             placeholder={isAnthropic ? "claude-3-5-sonnet-latest" : "gpt-4o-mini"}
           />
         )}
-        {isOllamaLocal && (
+        {isLocalBridge && (
           <p className="text-xs text-text-muted">
-            Leave blank to use <code>http://localhost:11434</code>. For remote Ollama, enter the full host URL (e.g. <code>http://192.168.1.10:11434</code>).
+            {provider === "chatgpt-web"
+              ? <>Leave blank to use <code>http://127.0.0.1:17841</code>. The bridge is local-only — override with another port/host if the bridge listens elsewhere. No API key needed.</>
+              : <>Leave blank to use <code>http://localhost:11434</code>. For remote Ollama, enter the full host URL (e.g. <code>http://192.168.1.10:11434</code>).</>}
           </p>
         )}
         {validationResult && (

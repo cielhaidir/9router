@@ -1008,5 +1008,16 @@
       "preserveCacheControl": true
     },
     "format": "openai"
+  },
+  "chatgpt-web": {
+    "baseUrl": "http://127.0.0.1:17841",
+    "format": "openai-responses",
+    "validateUrl": "http://127.0.0.1:17841/v1/models",
+    "forceStream": true,
+    "auth": {
+      "header": "Authorization",
+      "scheme": "bearer",
+      "combined": false
+    }
   }
 }

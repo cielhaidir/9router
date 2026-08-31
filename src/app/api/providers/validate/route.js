@@ -366,6 +366,7 @@ export async function POST(request) {
         case "hyperbolic":
         case "ollama":
         case "ollama-local":
+        case "chatgpt-web":
         case "assemblyai":
         case "nanobanana":
         case "chutes":

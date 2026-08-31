@@ -690,6 +690,11 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         const res = await fetch(`${host}/api/tags`);
         return { valid: res.ok, error: res.ok ? null : `Ollama not reachable at ${host}` };
       }
+      case "chatgpt-web": {
+        const raw = (connection.providerSpecificData?.baseUrl || PROVIDERS["chatgpt-web"]?.baseUrl || "http://127.0.0.1:17841").trim().replace(/\/$/, "");
+        const res = await fetchWithConnectionProxy(`${raw}/v1/models`, {}, effectiveProxy);
+        return { valid: res.ok, error: res.ok ? null : `ChatGPT Web bridge not reachable at ${raw}` };
+      }
       case "deepgram": {
         const res = await fetchWithConnectionProxy("https://api.deepgram.com/v1/projects", { headers: { Authorization: `Token ${connection.apiKey}` } }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
